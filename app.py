@@ -10,30 +10,44 @@ GROQ = os.environ.get("GROQ_API_KEY")
 @app.route("/", methods=["POST"])
 def webhook():
     data = request.json
-    
-    if "message" not in data:
+
+    if not data or "message" not in data:
         return "ok"
 
     chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text", "")
 
-    r = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {GROQ}",
-            "Content-Type": "application/json"
-        },
+    try:
+        # Request ke Groq
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama3-70b-8192",
+                "messages": [{"role": "user", "content": text}]
+            }
+        )
+
+        reply = r.json()["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        reply = "Terjadi error pada AI."
+
+    # Kirim balasan ke Telegram
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
         json={
-            "model": "llama3-70b-8192",
-            "messages": [{"role": "user", "content": text}]
+            "chat_id": chat_id,
+            "text": reply
         }
     )
 
-    reply = r.json()["choices"][0]["message"]["content"]
-
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        json={"chat_id": chat_id, "text": reply}
-    )
-
     return "ok"
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
