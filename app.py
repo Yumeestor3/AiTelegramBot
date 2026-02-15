@@ -1,25 +1,28 @@
 import os
 import requests
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
 TOKEN = os.environ.get("BOT_TOKEN")
 GROQ = os.environ.get("GROQ_API_KEY")
 
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running!"
+
 @app.route("/", methods=["POST"])
 def webhook():
-    data = request.json
+    data = request.get_json()
 
     if not data or "message" not in data:
-        return "ok"
+        return jsonify({"status": "no message"})
 
     chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text", "")
 
     try:
-        # Request ke Groq
-        r = requests.post(
+        groq_response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {GROQ}",
@@ -28,15 +31,16 @@ def webhook():
             json={
                 "model": "llama3-70b-8192",
                 "messages": [{"role": "user", "content": text}]
-            }
+            },
+            timeout=30
         )
 
-        reply = r.json()["choices"][0]["message"]["content"]
+        result = groq_response.json()
+        reply = result["choices"][0]["message"]["content"]
 
     except Exception as e:
-        reply = "Terjadi error pada AI."
+        reply = "AI sedang error."
 
-    # Kirim balasan ke Telegram
     requests.post(
         f"https://api.telegram.org/bot{TOKEN}/sendMessage",
         json={
@@ -45,7 +49,7 @@ def webhook():
         }
     )
 
-    return "ok"
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
